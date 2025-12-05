@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "homepage": "https://haya.codes",
+  "homepage": "https://lckdin.haya.codes",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

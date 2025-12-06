@@ -380,7 +380,7 @@ function App() {
           <div className="summary-title">today's summary</div>
           <div className="summary-stat">
             <span className="summary-num">{todayBlocks}</span>
-            <span className="summary-label">blocks completed</span>
+            <span className="summary-label">goals completed</span>
           </div>
           <div className="summary-stat">
             <span className="summary-num">{completedTasks.length}</span>
@@ -545,7 +545,7 @@ function App() {
 
           <div className="quick-tasks-section">
             <div className="quick-tasks-header">
-              <span className="quick-tasks-title">quick add</span>
+              <span className="quick-tasks-title">today's goals</span>
               <button 
                 className="add-quick-btn"
                 onClick={() => setShowQuickTaskInput(!showQuickTaskInput)}

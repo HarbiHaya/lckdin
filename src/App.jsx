@@ -75,8 +75,11 @@ function App() {
       playSound()
       if (mode === 'work') {
         setTotalBlocks(b => b + 1)
+        setBreakTimeLeft(5 * 60)
+        setShowBreakScreen(true)
       }
     }
+    
     return () => clearInterval(interval)
   }, [isRunning, timeLeft, mode])
 

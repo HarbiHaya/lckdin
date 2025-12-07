@@ -39,6 +39,17 @@ function App() {
     return saved ? JSON.parse(saved) : []
   })
   
+  const [completedGoals, setCompletedGoals] = useState(() => {
+    const saved = localStorage.getItem('dt-completed-goals')
+    const savedDate = localStorage.getItem('dt-goals-date')
+    const today = new Date().toDateString()
+    if (savedDate !== today) {
+      localStorage.setItem('dt-goals-date', today)
+      return 0
+    }
+    return saved ? JSON.parse(saved) : 0
+  })
+  
   const [newTask, setNewTask] = useState('')
   const [activeTask, setActiveTask] = useState(null)
   const [timerDuration, setTimerDuration] = useState(25)
@@ -76,6 +87,17 @@ function App() {
   const [newQuickTask, setNewQuickTask] = useState('')
   const [showQuickTaskInput, setShowQuickTaskInput] = useState(false)
   
+  const [goalsCompleted, setGoalsCompleted] = useState(() => {
+    const saved = localStorage.getItem('dt-goals-completed')
+    const savedDate = localStorage.getItem('dt-goals-date')
+    const today = new Date().toDateString()
+    if (savedDate !== today) {
+      localStorage.setItem('dt-goals-date', today)
+      return 0
+    }
+    return saved ? JSON.parse(saved) : 0
+  })
+  
   const [currentQuote, setCurrentQuote] = useState(QUOTES[0])
   const [showSummary, setShowSummary] = useState(false)
   const [brownNoiseOn, setBrownNoiseOn] = useState(false)
@@ -94,6 +116,10 @@ function App() {
   }, [completedTasks])
   
   useEffect(() => {
+    localStorage.setItem('dt-completed-goals', JSON.stringify(completedGoals))
+  }, [completedGoals])
+  
+  useEffect(() => {
     localStorage.setItem('dt-dark', JSON.stringify(darkMode))
   }, [darkMode])
   
@@ -108,6 +134,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('dt-quick-tasks', JSON.stringify(quickTasks))
   }, [quickTasks])
+
+  useEffect(() => {
+    localStorage.setItem('dt-goals-completed', JSON.stringify(goalsCompleted))
+  }, [goalsCompleted])
 
   // Main timer
   useEffect(() => {
@@ -250,7 +280,8 @@ function App() {
     const task = {
       id: Date.now(),
       text: newTask.trim(),
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      isGoal: false // Manual tasks are not goals
     }
     setTasks(prev => [...prev, task])
     setNewTask('')
@@ -277,6 +308,12 @@ function App() {
     }
     setTotalBlocks(b => b + 1)
     setTodayBlocks(b => b + 1)
+    
+    // Track if this was a goal (from quick tasks)
+    if (task.isGoal) {
+      setGoalsCompleted(g => g + 1)
+    }
+    
     if (triggerBreak) {
       setBreakTimeLeft(5 * 60)
       setShowBreakScreen(true)
@@ -290,13 +327,16 @@ function App() {
     completeTask(task, true)
   }
 
-  const addQuickTaskToList = (text) => {
+  const addQuickTaskToList = (text, index) => {
     const task = {
       id: Date.now(),
       text: text,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      isGoal: true
     }
     setTasks(prev => [...prev, task])
+    // Remove from presets after adding
+    setQuickTasks(prev => prev.filter((_, i) => i !== index))
   }
 
   const addNewQuickTask = (e) => {
@@ -379,7 +419,7 @@ function App() {
         <div className="summary-content">
           <div className="summary-title">today's summary</div>
           <div className="summary-stat">
-            <span className="summary-num">{todayBlocks}</span>
+            <span className="summary-num">{goalsCompleted}</span>
             <span className="summary-label">goals completed</span>
           </div>
           <div className="summary-stat">
@@ -428,10 +468,10 @@ function App() {
               <span className="blocks-label">total blocks</span>
             </div>
             <div className="today-count">
-              <span className="today-num">{todayBlocks}</span>
+              <span className="today-num">{goalsCompleted}</span>
               <span className="today-divider">/</span>
-              <span className="today-goal">{quickTasks.length}</span>
-              <span className="today-label">today</span>
+              <span className="today-goal">{quickTasks.length + goalsCompleted}</span>
+              <span className="today-label">goals</span>
             </div>
             <div className="top-actions">
               <button className={`noise-toggle ${brownNoiseOn ? 'active' : ''}`} onClick={toggleBrownNoise}>
@@ -495,8 +535,8 @@ function App() {
               </>
             ) : (
               <div className="no-task">
-                <div className="no-task-text">pick a task below</div>
-                <div className="no-task-sub">or add one</div>
+                <div className="no-task-text">pick a goal below</div>
+                <div className="no-task-sub">or add a quick task</div>
                 {tasks.length > 0 && (
                   <button className="random-btn" onClick={pickRandomTask}>pick random for me</button>
                 )}
@@ -509,14 +549,14 @@ function App() {
               ref={inputRef}
               type="text"
               className="task-input"
-              placeholder="[action] + [what] + [time]"
+              placeholder="add a quick task..."
               value={newTask}
               onChange={(e) => setNewTask(e.target.value)}
             />
             <button type="submit" className="add-btn">add</button>
           </form>
           
-          <div className="task-hint">e.g. "solve 3 algorithm problems (1hr)"</div>
+          <div className="task-hint">quick task — won't count toward today's goals</div>
 
           <div className="task-list">
             {tasks.map(task => (
@@ -550,16 +590,17 @@ function App() {
                 className="add-quick-btn"
                 onClick={() => setShowQuickTaskInput(!showQuickTaskInput)}
               >
-                {showQuickTaskInput ? 'cancel' : '+ new'}
+                {showQuickTaskInput ? 'cancel' : '+ add goal'}
               </button>
             </div>
+            <div className="goals-hint">set your goals before you start — these count toward your progress</div>
             
             {showQuickTaskInput && (
               <form className="quick-task-form" onSubmit={addNewQuickTask}>
                 <input
                   type="text"
                   className="quick-task-input"
-                  placeholder="new preset task..."
+                  placeholder="[action] + [what] + [time] e.g. study chapter 5 (1hr)"
                   value={newQuickTask}
                   onChange={(e) => setNewQuickTask(e.target.value)}
                   autoFocus
@@ -573,7 +614,7 @@ function App() {
                 <button
                   key={index}
                   className="quick-task-chip"
-                  onClick={() => addQuickTaskToList(text)}
+                  onClick={() => addQuickTaskToList(text, index)}
                 >
                   {text}
                   <span 
@@ -1131,6 +1172,12 @@ html {
   text-transform: uppercase;
   letter-spacing: 0.15em;
   opacity: 0.4;
+}
+
+.goals-hint {
+  font-size: 12px;
+  opacity: 0.3;
+  margin-bottom: 16px;
 }
 
 .add-quick-btn {

@@ -101,10 +101,16 @@ function App() {
   const [currentQuote, setCurrentQuote] = useState(QUOTES[0])
   const [showSummary, setShowSummary] = useState(false)
   const [brownNoiseOn, setBrownNoiseOn] = useState(false)
+  const [editingTask, setEditingTask] = useState(null)
+  const [editingGoal, setEditingGoal] = useState(null)
+  const [editText, setEditText] = useState('')
+  const [draggedTask, setDraggedTask] = useState(null)
+  const [draggedGoal, setDraggedGoal] = useState(null)
   
   const inputRef = useRef(null)
   const audioRef = useRef(null)
   const brownNoiseRef = useRef(null)
+  const editInputRef = useRef(null)
 
   // Persist
   useEffect(() => {
@@ -332,11 +338,10 @@ function App() {
       id: Date.now(),
       text: text,
       createdAt: new Date().toISOString(),
-      isGoal: true
+      isGoal: true,
+      goalIndex: index
     }
     setTasks(prev => [...prev, task])
-    // Remove from presets after adding
-    setQuickTasks(prev => prev.filter((_, i) => i !== index))
   }
 
   const addNewQuickTask = (e) => {
@@ -374,6 +379,110 @@ function App() {
       setIsRunning(false)
       setTimeLeft(timerDuration * 60)
     }
+  }
+
+  // Double click to edit task
+  const handleTaskDoubleClick = (task, e) => {
+    e.stopPropagation()
+    setEditingTask(task.id)
+    setEditText(task.text)
+    setTimeout(() => editInputRef.current?.focus(), 0)
+  }
+
+  const saveTaskEdit = (taskId) => {
+    if (editText.trim()) {
+      setTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, text: editText.trim() } : t
+      ))
+    }
+    setEditingTask(null)
+    setEditText('')
+  }
+
+  // Double click to edit goal
+  const handleGoalDoubleClick = (index, e) => {
+    e.stopPropagation()
+    setEditingGoal(index)
+    setEditText(quickTasks[index])
+    setTimeout(() => editInputRef.current?.focus(), 0)
+  }
+
+  const saveGoalEdit = (index) => {
+    if (editText.trim()) {
+      setQuickTasks(prev => prev.map((t, i) => 
+        i === index ? editText.trim() : t
+      ))
+    }
+    setEditingGoal(null)
+    setEditText('')
+  }
+
+  // Drag and drop for tasks
+  const handleTaskDragStart = (e, task) => {
+    setDraggedTask(task)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleTaskDragOver = (e, index) => {
+    e.preventDefault()
+    if (!draggedTask) return
+    
+    const draggedIndex = tasks.findIndex(t => t.id === draggedTask.id)
+    if (draggedIndex === index) return
+    
+    const newTasks = [...tasks]
+    newTasks.splice(draggedIndex, 1)
+    newTasks.splice(index, 0, draggedTask)
+    setTasks(newTasks)
+  }
+
+  const handleTaskDragEnd = () => {
+    setDraggedTask(null)
+  }
+
+  // Drag and drop for goals
+  const handleGoalDragStart = (e, index) => {
+    setDraggedGoal(index)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleGoalDragOver = (e, index) => {
+    e.preventDefault()
+    if (draggedGoal === null || draggedGoal === index) return
+    
+    const newGoals = [...quickTasks]
+    const [removed] = newGoals.splice(draggedGoal, 1)
+    newGoals.splice(index, 0, removed)
+    setQuickTasks(newGoals)
+    setDraggedGoal(index)
+  }
+
+  const handleGoalDragEnd = () => {
+    setDraggedGoal(null)
+  }
+
+  // Move task to goals
+  const moveTaskToGoals = (task) => {
+    setQuickTasks(prev => [...prev, task.text])
+    setTasks(prev => prev.filter(t => t.id !== task.id))
+    if (activeTask?.id === task.id) {
+      setActiveTask(null)
+      setIsRunning(false)
+      setTimeLeft(timerDuration * 60)
+    }
+  }
+
+  // Move goal to tasks
+  const moveGoalToTasks = (index) => {
+    const text = quickTasks[index]
+    const task = {
+      id: Date.now(),
+      text: text,
+      createdAt: new Date().toISOString(),
+      isGoal: true
+    }
+    setTasks(prev => [...prev, task])
+    setQuickTasks(prev => prev.filter((_, i) => i !== index))
   }
 
   // Panic button - switch to 10 min
@@ -559,18 +668,44 @@ function App() {
           <div className="task-hint">quick task — won't count toward today's goals</div>
 
           <div className="task-list">
-            {tasks.map(task => (
+            {tasks.map((task, index) => (
               <div 
                 key={task.id} 
-                className={`task-item ${activeTask?.id === task.id ? 'active' : ''}`}
+                className={`task-item ${activeTask?.id === task.id ? 'active' : ''} ${draggedTask?.id === task.id ? 'dragging' : ''}`}
                 onClick={() => handleTaskClick(task)}
+                onDoubleClick={(e) => handleTaskDoubleClick(task, e)}
+                draggable
+                onDragStart={(e) => handleTaskDragStart(e, task)}
+                onDragOver={(e) => handleTaskDragOver(e, index)}
+                onDragEnd={handleTaskDragEnd}
               >
                 <button 
                   className="check-btn"
                   onClick={(e) => handleCheckClick(task, e)}
                   title="complete + break"
                 />
-                <span className="task-text">{task.text}</span>
+                {editingTask === task.id ? (
+                  <input
+                    ref={editInputRef}
+                    type="text"
+                    className="edit-input"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onBlur={() => saveTaskEdit(task.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveTaskEdit(task.id)
+                      if (e.key === 'Escape') { setEditingTask(null); setEditText('') }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="task-text">{task.text}</span>
+                )}
+                <button 
+                  className="move-btn"
+                  onClick={(e) => { e.stopPropagation(); moveTaskToGoals(task) }}
+                  title="move to goals"
+                >↓</button>
                 <button 
                   className="delete-btn"
                   onClick={(e) => deleteTask(task, e)}
@@ -611,17 +746,38 @@ function App() {
             
             <div className="quick-tasks-list">
               {quickTasks.map((text, index) => (
-                <button
+                <div
                   key={index}
-                  className="quick-task-chip"
-                  onClick={() => addQuickTaskToList(text, index)}
+                  className={`quick-task-chip ${draggedGoal === index ? 'dragging' : ''}`}
+                  onClick={() => moveGoalToTasks(index)}
+                  onDoubleClick={(e) => handleGoalDoubleClick(index, e)}
+                  draggable
+                  onDragStart={(e) => handleGoalDragStart(e, index)}
+                  onDragOver={(e) => handleGoalDragOver(e, index)}
+                  onDragEnd={handleGoalDragEnd}
                 >
-                  {text}
+                  {editingGoal === index ? (
+                    <input
+                      ref={editInputRef}
+                      type="text"
+                      className="edit-input-small"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onBlur={() => saveGoalEdit(index)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveGoalEdit(index)
+                        if (e.key === 'Escape') { setEditingGoal(null); setEditText('') }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span>{text}</span>
+                  )}
                   <span 
                     className="chip-remove"
                     onClick={(e) => removeQuickTask(index, e)}
                   >x</span>
-                </button>
+                </div>
               ))}
             </div>
           </div>
@@ -1100,8 +1256,13 @@ html {
   gap: 16px;
   padding: 20px 22px;
   border: 1px solid;
-  cursor: pointer;
+  cursor: grab;
   transition: all 0.15s;
+  user-select: none;
+}
+
+.task-item:active {
+  cursor: grabbing;
 }
 
 .dark .task-item { border-color: #222; }
@@ -1142,6 +1303,54 @@ html {
 }
 
 .delete-btn:hover { opacity: 0.6; }
+
+.move-btn {
+  font-size: 14px;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.25;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 8px;
+  transition: opacity 0.15s;
+}
+
+.move-btn:hover { opacity: 0.6; }
+
+.edit-input {
+  flex: 1;
+  font-size: 17px;
+  padding: 4px 8px;
+  border: 1px solid #22c55e;
+  background: transparent;
+  font-family: inherit;
+  outline: none;
+}
+
+.dark .edit-input { color: #c8c8c8; }
+.light .edit-input { color: #1a1a1a; }
+
+.edit-input-small {
+  font-size: 14px;
+  padding: 2px 6px;
+  border: 1px solid #22c55e;
+  background: transparent;
+  font-family: inherit;
+  outline: none;
+  width: 100%;
+}
+
+.dark .edit-input-small { color: #c8c8c8; }
+.light .edit-input-small { color: #1a1a1a; }
+
+.task-item.dragging {
+  opacity: 0.5;
+}
+
+.quick-task-chip.dragging {
+  opacity: 0.5;
+}
 
 .empty-state {
   text-align: center;
@@ -1238,12 +1447,17 @@ html {
   padding: 10px 16px;
   border: 1px solid;
   background: none;
-  cursor: pointer;
+  cursor: grab;
   font-family: inherit;
   transition: all 0.15s;
   display: flex;
   align-items: center;
   gap: 10px;
+  user-select: none;
+}
+
+.quick-task-chip:active {
+  cursor: grabbing;
 }
 
 .dark .quick-task-chip { color: #c8c8c8; border-color: #333; }
@@ -1421,6 +1635,7 @@ html {
   .today-divider { font-size: 14px; }
   .today-label { font-size: 9px; }
   .mode-toggle { font-size: 12px; padding: 10px 16px; }
+  .noise-toggle { font-size: 12px; padding: 10px 16px; }
   .timer { font-size: 48px; }
   .timer-ring-container { width: 180px; height: 180px; }
   .active-task-name { font-size: 16px; margin-bottom: 16px; }

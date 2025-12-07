@@ -535,8 +535,8 @@ function App() {
               </>
             ) : (
               <div className="no-task">
-                <div className="no-task-text">pick a goal below</div>
-                <div className="no-task-sub">or add a quick task</div>
+                <div className="no-task-text">add a quick task</div>
+                <div className="no-task-sub">or pick a goal below</div>
                 {tasks.length > 0 && (
                   <button className="random-btn" onClick={pickRandomTask}>pick random for me</button>
                 )}
